@@ -120,5 +120,24 @@ namespace MobileAppTp.Controllers
                 message = "unauthorized!"
             });
         }
+
+        [HttpDelete("delete-product")]
+        public IActionResult Delete(string title)
+        {
+            var product = _context.Products.FirstOrDefault(x => x.Title == title);
+            if(product == null)
+            {
+                return NotFound(new
+                {
+                    message = "product not found!"
+                });
+            }
+            _context.Remove(product);
+            _context.SaveChanges(true);
+            return Ok(new
+            {
+                message = "product deleted seccufuly!"
+            });
+        }
     }
 }
