@@ -1,12 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace MobileAppTp.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("Products")]
     public class ProductsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -76,9 +77,28 @@ namespace MobileAppTp.Controllers
             return Ok(new { message = "Product updated successfully" });
         }
 
+        [HttpDelete]
+        public IActionResult Delete(string title)
+        {
+            var product = _context.Products.FirstOrDefault(x => x.Title == title);
+            if (product == null)
+            {
+                return NotFound(new
+                {
+                    message = "product not found!"
+                });
+            }
+            _context.Remove(product);
+            _context.SaveChanges(true);
+            return Ok(new
+            {
+                message = "product deleted seccufuly!"
+            });
+        }
+
         [Authorize]
-        [HttpPost("add-to-favorite")]
-        public async Task<IActionResult> AddProductTofavoriteAsync([FromQuery] string productId)
+        [HttpPost("favorites")]
+        public async Task<IActionResult> AddProductTofavoritesAsync([FromQuery] string title)
         {
             if(User.Identity != null)
             {
@@ -89,7 +109,7 @@ namespace MobileAppTp.Controllers
                     var user = await userManager.FindByIdAsync(userId);
                     if(user != null)
                     {
-                        var product = _context.Products.Find(productId);
+                        var product = _context.Products.Find(title);
                         if(product != null)
                         {
                             user.Favorites.Add(product);
@@ -121,23 +141,82 @@ namespace MobileAppTp.Controllers
             });
         }
 
-        [HttpDelete("delete-product")]
-        public IActionResult Delete(string title)
+        [Authorize]
+        [HttpGet("favorites")]
+        public IActionResult GetFavorites()
         {
-            var product = _context.Products.FirstOrDefault(x => x.Title == title);
-            if(product == null)
+            if (User.Identity != null)
             {
+                var userIdentity = (ClaimsIdentity)User.Identity;
+                var userId = userIdentity.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (userId != null)
+                {
+                    var user = _context.Users.Include(u => u.Favorites).FirstOrDefault(u => u.Id == userId);
+
+                    if (user != null)
+                    {
+                        return Ok(new
+                        {
+                            user.Favorites
+                        });
+                    }
+                    return NotFound(new
+                    {
+                        message = "user with this token not found!"
+                    });
+                }
                 return NotFound(new
                 {
-                    message = "product not found!"
+                    message = "userId not found in the token!"
                 });
             }
-            _context.Remove(product);
-            _context.SaveChanges(true);
-            return Ok(new
+            return Forbid("can not validate user identity!");
+        }
+
+        [Authorize]
+        [HttpDelete("favorites")]
+        public IActionResult DeleteProductFromfavorites([FromQuery] string title)
+        {
+            if (User.Identity != null)
             {
-                message = "product deleted seccufuly!"
+                var userIdentity = (ClaimsIdentity)User.Identity;
+                var userId = userIdentity.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                {
+                    var user = _context.Users.Include(u => u.Favorites).FirstOrDefault(u => u.Id == userId);
+                    if (user != null)
+                    {
+                        var product = _context.Products.Find(title);
+                        if (product != null)
+                        {
+                            user.Favorites.Remove(product);
+                            _context.SaveChanges();
+                            return Ok(new
+                            {
+                                message = "product deleted seccufuly from favorites!"
+                            });
+                        }
+                        return BadRequest(new
+                        {
+                            message = "product not found!"
+                        });
+                    }
+                    return BadRequest(new
+                    {
+                        message = "user not found!"
+                    });
+                }
+                return BadRequest(new
+                {
+                    message = "userid in this jwt not found!"
+                });
+            }
+
+            return Unauthorized(new
+            {
+                message = "unauthorized!"
             });
         }
+
     }
 }
